@@ -26,14 +26,14 @@ TRANSFER_EVENT_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)").hex
 
 # Default RPC URLs keyed by chain name; overridden by X402_RPC_URL env var.
 X402_DEFAULT_RPCS = {
-    "arc_testnet": "https://rpc.arc.testnet.circle.com",
+    "arc_testnet": "https://arc-testnet.drpc.org",
 }
 
 X402_CHAIN_IDS = {
     "crossfi": 3726,
     "mainnet": 1,
     "arc": 5042002,
-    "arc_testnet": 1516,
+    "arc_testnet": 5042002,
 }
 
 
