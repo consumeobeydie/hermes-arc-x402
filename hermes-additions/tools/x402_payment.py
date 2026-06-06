@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from web3 import Web3
 from web3.exceptions import ValidationError
+from eth_abi import encode_abi
 from eth_account import Account
 from eth_utils import to_checksum_address, to_bytes, to_hex, event_abi_to_log_topic
 
@@ -220,7 +221,7 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
     # Build EIP-3009 calldata
     encoded = (
         EIP3009_SELECTOR
-        + Web3.codec.encode_abi(
+        + encode_abi(
             ["address", "address", "uint256", "uint256", "uint256", "bytes32"],
             [Web3.to_checksum_address(sender), to, value, valid_after, valid_before, nonce_bytes],
         )
@@ -264,7 +265,7 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
     )
 
     v, r, s = signed.v, signed.r, signed.s
-    tx_data = encoded + Web3.codec.encode_abi(["uint8", "bytes32", "bytes32"], [v, r, s])
+    tx_data = encoded + encode_abi(["uint8", "bytes32", "bytes32"], [v, r, s])
 
     tx = {
         "chainId": chain_id,
