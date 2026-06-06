@@ -8,7 +8,7 @@ from web3 import Web3
 from web3.exceptions import ValidationError
 from eth_abi import encode
 from eth_account import Account
-from eth_account.messages import encode_structured_data
+from eth_account.messages import encode_typed_data
 from eth_utils import to_checksum_address, to_bytes, to_hex, event_abi_to_log_topic
 
 load_dotenv()
@@ -262,11 +262,11 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
             "nonce": nonce_bytes,
         },
     }
-    encoded_msg = encode_structured_data(structured_data)
+    encoded_msg = encode_typed_data(structured_data)
     signed = acct.sign_message(encoded_msg)
 
     v, r, s = signed.v, signed.r, signed.s
-    tx_data = encoded + encode(["uint8", "bytes32", "bytes32"], [v, r, s])
+    tx_data = encoded + encode(["uint8", "bytes32", "bytes32"], [v, r.to_bytes(32, 'big'), s.to_bytes(32, 'big')])
 
     tx = {
         "chainId": chain_id,
