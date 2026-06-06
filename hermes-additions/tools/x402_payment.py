@@ -262,7 +262,11 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
             "nonce": nonce_bytes,
         },
     }
-    encoded_msg = encode_typed_data(structured_data)
+    encoded_msg = encode_typed_data(
+        structured_data["domain"],
+        structured_data["types"],
+        structured_data["message"],
+    )
     signed = acct.sign_message(encoded_msg)
 
     v, r, s = signed.v, signed.r, signed.s
