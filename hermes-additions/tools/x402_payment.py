@@ -24,11 +24,16 @@ X402_USDC_CONTRACTS = {
 EIP3009_SELECTOR = Web3.keccak(text="TransferWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)")[:4]
 TRANSFER_EVENT_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)").hex()
 
+# Default RPC URLs keyed by chain name; overridden by X402_RPC_URL env var.
+X402_DEFAULT_RPCS = {
+    "arc_testnet": "https://rpc.arc.testnet.circle.com",
+}
+
 X402_CHAIN_IDS = {
     "crossfi": 3726,
     "mainnet": 1,
     "arc": 5042002,
-    "arc_testnet": 5042002,
+    "arc_testnet": 1516,
 }
 
 
@@ -40,11 +45,16 @@ def _get_env(name: str) -> str:
 
 
 def _build_w3() -> Web3:
-    rpc = _get_env("X402_RPC_URL")
     chain = os.environ.get("X402_CHAIN_ID", "crossfi").lower()
     chain_id = X402_CHAIN_IDS.get(chain)
     if chain_id is None:
         raise RuntimeError(f"Unsupported X402_CHAIN_ID: {chain}")
+    # Use X402_RPC_URL from env, falling back to a known default for this chain
+    rpc = os.environ.get("X402_RPC_URL") or X402_DEFAULT_RPCS.get(chain)
+    if not rpc:
+        raise RuntimeError(
+            f"No RPC URL for chain '{chain}'. Set X402_RPC_URL or add an entry to X402_DEFAULT_RPCS."
+        )
     w3 = Web3(Web3.HTTPProvider(rpc))
     if not w3.is_connected():
         raise RuntimeError(f"Cannot connect to RPC: {rpc}")
