@@ -64,7 +64,8 @@ def x402_request(url: str, method: str = "GET", max_payment_usd: float = 1.0, **
     print(f"[x402] Paying ${amount} USDC to {recipient}")
     
     # Make payment
-    payment_result = x402_send_usdc_eip3009(recipient, float(amount))
+    raw = x402_send_usdc_eip3009(recipient, float(amount))
+    payment_result = json.loads(raw) if isinstance(raw, str) else raw
     
     if not payment_result.get("ok"):
         return {"ok": False, "error": "Payment failed", "payment": payment_result}
