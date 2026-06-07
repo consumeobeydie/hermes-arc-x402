@@ -8,7 +8,7 @@ from web3 import Web3
 from web3.exceptions import ValidationError
 from eth_abi import encode
 from eth_account import Account
-from eth_account.messages import encode_typed_data
+
 from eth_utils import to_checksum_address, to_bytes, to_hex, event_abi_to_log_topic
 
 load_dotenv()
@@ -229,41 +229,31 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
     )
 
     # Sign authorization with EIP-712 via web3.py v6
-    structured_data = {
-        "types": {
-            "EIP712Domain": [
-                {"name": "name", "type": "string"},
-                {"name": "version", "type": "string"},
-                {"name": "chainId", "type": "uint256"},
-                {"name": "verifyingContract", "type": "address"},
-            ],
-            "TransferWithAuthorization": [
-                {"name": "from", "type": "address"},
-                {"name": "to", "type": "address"},
-                {"name": "value", "type": "uint256"},
-                {"name": "validAfter", "type": "uint256"},
-                {"name": "validBefore", "type": "uint256"},
-                {"name": "nonce", "type": "bytes32"},
-            ],
-        },
-        "domain": {
-            "name": "USD Coin",
-            "version": "2",
-            "chainId": chain_id,
-            "verifyingContract": usdc_address,
-        },
-        "primaryType": "TransferWithAuthorization",
-        "message": {
-            "from": sender,
-            "to": to,
-            "value": value,
-            "validAfter": valid_after,
-            "validBefore": valid_before,
-            "nonce": nonce_bytes,
-        },
+    domain = {
+        "name": "USD Coin",
+        "version": "2",
+        "chainId": chain_id,
+        "verifyingContract": usdc_address,
     }
-    encoded_msg = encode_typed_data(structured_data)
-    signed = acct.sign_message(encoded_msg)
+    types = {
+        "TransferWithAuthorization": [
+            {"name": "from", "type": "address"},
+            {"name": "to", "type": "address"},
+            {"name": "value", "type": "uint256"},
+            {"name": "validAfter", "type": "uint256"},
+            {"name": "validBefore", "type": "uint256"},
+            {"name": "nonce", "type": "bytes32"},
+        ],
+    }
+    message = {
+        "from": sender,
+        "to": to,
+        "value": value,
+        "validAfter": valid_after,
+        "validBefore": valid_before,
+        "nonce": nonce_bytes,
+    }
+    signed = w3.eth.account.sign_typed_data(domain, types, message)
 
     v, r, s = signed.v, signed.r, signed.s
     tx_data = encoded + encode(["uint8", "bytes32", "bytes32"], [v, r.to_bytes(32, 'big'), s.to_bytes(32, 'big')])
