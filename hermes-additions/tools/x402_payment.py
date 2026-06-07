@@ -217,7 +217,8 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
     now = int(time.time())
     valid_after = now - 60
     valid_before = now + 600
-    nonce_bytes = to_bytes(os.urandom(32))
+    nonce_hex = os.urandom(32).hex()
+    nonce_bytes = bytes.fromhex(nonce_hex)
 
     # Build EIP-3009 calldata
     encoded = (
@@ -251,13 +252,16 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
         "value": value,
         "validAfter": valid_after,
         "validBefore": valid_before,
-        "nonce": nonce_bytes,
+        "nonce": "0x" + nonce_hex,
     }
     print("=== DEBUG sign_typed_data ===")
     print("DOMAIN:", json.dumps(domain, default=str, indent=2))
     print("TYPES:", json.dumps(types, default=str, indent=2))
     print("MESSAGE:", json.dumps(message, default=str, indent=2))
-    signed = w3.eth.account.sign_typed_data(domain, types, message)
+    pk = _get_env("X402_PRIVATE_KEY")
+    if not pk.startswith("0x"):
+        pk = "0x" + pk
+    signed = w3.eth.account.sign_typed_data(private_key=pk, domain_data=domain, message_types=types, message_data=message)
 
     v, r, s = signed.v, signed.r, signed.s
     tx_data = encoded + encode(["uint8", "bytes32", "bytes32"], [v, r.to_bytes(32, 'big'), s.to_bytes(32, 'big')])
