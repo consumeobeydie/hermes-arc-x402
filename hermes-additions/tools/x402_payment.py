@@ -170,9 +170,8 @@ def x402_send_native(to: str, amount: float) -> str:
         "gas": 21000,
     }
     gas_price = w3.eth.gas_price
-    tx["gasPrice"] = gas_price
     tx["maxFeePerGas"] = gas_price
-    tx["maxPriorityFeePerGas"] = 0
+    tx["maxPriorityFeePerGas"] = Web3.to_wei(1, "gwei")
 
     signed = acct.sign_transaction(tx)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -254,10 +253,6 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
         "validBefore": valid_before,
         "nonce": "0x" + nonce_hex,
     }
-    print("=== DEBUG sign_typed_data ===")
-    print("DOMAIN:", json.dumps(domain, default=str, indent=2))
-    print("TYPES:", json.dumps(types, default=str, indent=2))
-    print("MESSAGE:", json.dumps(message, default=str, indent=2))
     pk = _get_env("X402_PRIVATE_KEY")
     if not pk.startswith("0x"):
         pk = "0x" + pk
@@ -274,9 +269,8 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
         "gas": 160000,
     }
     gas_price = w3.eth.gas_price
-    tx["gasPrice"] = gas_price
     tx["maxFeePerGas"] = gas_price
-    tx["maxPriorityFeePerGas"] = 0
+    tx["maxPriorityFeePerGas"] = Web3.to_wei(1, "gwei")
 
     signed_tx = acct.sign_transaction(tx)
     tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
