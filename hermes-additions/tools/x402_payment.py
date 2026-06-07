@@ -273,7 +273,7 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
     tx["maxPriorityFeePerGas"] = Web3.to_wei(1, "gwei")
 
     signed_tx = acct.sign_transaction(tx)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
 
     result = {
