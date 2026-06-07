@@ -253,6 +253,10 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
         "validBefore": valid_before,
         "nonce": nonce_bytes,
     }
+    print("=== DEBUG sign_typed_data ===")
+    print("DOMAIN:", json.dumps(domain, default=str, indent=2))
+    print("TYPES:", json.dumps(types, default=str, indent=2))
+    print("MESSAGE:", json.dumps(message, default=str, indent=2))
     signed = w3.eth.account.sign_typed_data(domain, types, message)
 
     v, r, s = signed.v, signed.r, signed.s
