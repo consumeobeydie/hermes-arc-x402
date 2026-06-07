@@ -24,6 +24,8 @@ X402_USDC_CONTRACTS = {
 
 # EIP-3009 TransferWithAuthorization signature
 EIP3009_SELECTOR = Web3.keccak(text="TransferWithAuthorization(address,address,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)")[:4]
+# Standard ERC-20 transfer selector
+TRANSFER_SELECTOR = Web3.keccak(text="transfer(address,uint256)")[:4]
 TRANSFER_EVENT_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)").hex()
 
 # Default RPC URLs keyed by chain name; overridden by X402_RPC_URL env var.
@@ -190,36 +192,14 @@ def x402_send_native(to: str, amount: float) -> str:
     })
 
 
-def x402_send_usdc_eip3009(to: str, amount: float) -> str:
-    """
-    Send USDC on supported networks using EIP-3009 TransferWithAuthorization.
-
-    Returns a JSON object with either:
-    - "ok": true, "tx_hash", "raw_authorization" when signed txn is sent, or
-    - "ok": true, "raw_authorization" when only offchain authorization is requested.
-    """
-    to = to_checksum_address(to)
-    w3, chain_id = _build_w3()
-    acct = _account()
-    sender = to_checksum_address(acct.address)
-
-    usdc_address = _usdc_address(w3, chain_id)
-
-    # USDC has 6 decimals
-    decimals = _usdc_decimals()
-    value = _normalize_usdc(amount)
-
-    # Safety cap: max $1.00 per request
-    if amount > 1.00:
-        raise ValueError("Amount exceeds safety limit of $1.00 USDC")
-
+def _send_eip3009(w3: Web3, acct, sender: str, usdc_address: str, to: str, value: int, chain_id: int, amount: float) -> dict:
+    """Build, sign, and send EIP-3009 TransferWithAuthorization. Returns result dict."""
     now = int(time.time())
     valid_after = now - 60
     valid_before = now + 600
     nonce_hex = os.urandom(32).hex()
     nonce_bytes = bytes.fromhex(nonce_hex)
 
-    # Build EIP-3009 calldata
     encoded = (
         EIP3009_SELECTOR
         + encode(
@@ -228,7 +208,6 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
         )
     )
 
-    # Sign authorization with EIP-712 via web3.py v6
     domain = {
         "name": "USD Coin",
         "version": "2",
@@ -276,27 +255,112 @@ def x402_send_usdc_eip3009(to: str, amount: float) -> str:
     tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
 
-    result = {
+    return {
         "ok": receipt.status == 1,
         "tx_hash": tx_hash.hex(),
-        "chain_id": chain_id,
-        "from": sender,
-        "to": to,
         "amount": amount,
         "contract": usdc_address,
         "gas_price_gwei": round(gas_price / 1e9, 2),
-        "raw_authorization": to_hex(tx_data),
+        "raw_data": to_hex(tx_data),
+        "method": "eip3009",
+        "nonce_hex": nonce_hex,
         "status": "confirmed" if receipt.status == 1 else "reverted",
         "block_number": receipt.blockNumber,
         "gas_used": receipt.gasUsed,
     }
 
-    # Optional verification: confirm matching Transfer event
-    if receipt.status == 1:
+
+def _send_transfer(w3: Web3, acct, sender: str, usdc_address: str, to: str, value: int, chain_id: int, amount: float) -> dict:
+    """Build, sign, and send a simple ERC-20 transfer(). Returns result dict."""
+    tx_data = TRANSFER_SELECTOR + encode(["address", "uint256"], [to, value])
+
+    tx = {
+        "chainId": chain_id,
+        "nonce": w3.eth.get_transaction_count(sender),
+        "to": usdc_address,
+        "data": tx_data,
+        "gas": 100000,
+    }
+    gas_price = w3.eth.gas_price
+    tx["maxFeePerGas"] = gas_price
+    tx["maxPriorityFeePerGas"] = Web3.to_wei(1, "gwei")
+
+    signed_tx = acct.sign_transaction(tx)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+    receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
+
+    return {
+        "ok": receipt.status == 1,
+        "tx_hash": tx_hash.hex(),
+        "amount": amount,
+        "contract": usdc_address,
+        "gas_price_gwei": round(gas_price / 1e9, 2),
+        "raw_data": to_hex(tx_data),
+        "method": "erc20_transfer",
+        "status": "confirmed" if receipt.status == 1 else "reverted",
+        "block_number": receipt.blockNumber,
+        "gas_used": receipt.gasUsed,
+    }
+
+
+def x402_send_usdc_eip3009(to: str, amount: float) -> str:
+    """
+    Send USDC on supported networks using EIP-3009 TransferWithAuthorization,
+    with automatic fallback to simple ERC-20 transfer() if EIP-3009 reverts.
+
+    Some networks (e.g. Arc Testnet) use a native system contract for USDC
+    that may not support EIP-3009.  The fallback ensures the payment still
+    succeeds via a standard token transfer.
+
+    Returns a JSON object with the result of the successful method, or
+    both attempts if both failed.
+    """
+    to = to_checksum_address(to)
+    w3, chain_id = _build_w3()
+    acct = _account()
+    sender = to_checksum_address(acct.address)
+
+    usdc_address = _usdc_address(w3, chain_id)
+
+    # USDC has 6 decimals
+    value = _normalize_usdc(amount)
+
+    # Safety cap: max $1.00 per request
+    if amount > 1.00:
+        raise ValueError("Amount exceeds safety limit of $1.00 USDC")
+
+    # --- Attempt 1: EIP-3009 ---
+    result = _send_eip3009(w3, acct, sender, usdc_address, to, value, chain_id, amount)
+
+    if result["ok"]:
         verification = _verify_usdc_transfer(w3, usdc_address, sender, to, value)
         result["verified"] = verification.get("ok", False)
         result["verification"] = verification
-    return json.dumps(result)
+        result["fallback_used"] = False
+        return json.dumps(result)
+
+    # --- Attempt 2: simple ERC-20 transfer() fallback ---
+    fallback = _send_transfer(w3, acct, sender, usdc_address, to, value, chain_id, amount)
+
+    if fallback["ok"]:
+        verification = _verify_usdc_transfer(w3, usdc_address, sender, to, value)
+        fallback["verified"] = verification.get("ok", False)
+        fallback["verification"] = verification
+        fallback["fallback_used"] = True
+        fallback["eip3009_error"] = result.get("status", "reverted")
+        return json.dumps(fallback)
+
+    # Both failed — return combined info
+    return json.dumps({
+        "ok": False,
+        "fallback_used": True,
+        "eip3009": result,
+        "erc20_transfer": fallback,
+        "from": sender,
+        "to": to,
+        "contract": usdc_address,
+        "amount": amount,
+    })
 
 
 if __name__ == "__main__":
